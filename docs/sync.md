@@ -4,6 +4,8 @@
 
 Each device keeps a local Markdown copy and MCP process. Syncthing replicates files; this package owns memory semantics. An always-on peer is optional.
 
+自己的 Linux VPS 从安装到配对见 [vps.md](vps.md)；具体故障见 [troubleshooting.md](troubleshooting.md)。只希望客户端共享服务器的一份库，可以使用 [远程 MCP](remote.md)；需要离线副本时再配置本篇的同步。
+
 ## 首台设备 / First device
 
 1. 初始化：`agent-knowledge-mcp init --root /absolute/path/to/memory`。
@@ -48,3 +50,27 @@ Deletion replicates too. Keep an independent backup; this package does not insta
 可以在常在线节点同时启动 HTTP MCP，远程客户端访问该节点，本地设备继续使用离线副本。远程修改到其他设备的传播仍是最终一致。
 
 An always-on replica can also expose HTTP MCP. Remote writes remain subject to eventual replication to other devices.
+
+<a id="roundtrip"></a>
+## 如何确认真的同步成功
+
+先确认双方 Syncthing 显示 Connected，并且共享文件夹完成扫描、Up to Date。然后使用双方实际 MCP 客户端验收：
+
+1. A 创建一条唯一的临时 Note，例如 `memory://note/setup-check-unique-id`，写入可辨认的测试内容。先确认该 URI 不存在，避免操作真实记忆。
+2. 等待传播后，B 精确 read 同一 URI，检查正文和 etag。也查看两端实际 Markdown 和各自 Syncthing 状态，排除连接错 root。
+3. B 使用其刚读取的 etag 更新正文。等待 A 读取到新正文和新 etag。
+4. A 重读后，以最新 etag 删除临时记忆。等待 B 精确 read 返回 NOT_FOUND。
+5. 双方 status 检查是否存在坏文档或冲突副本，再确认 Syncthing 没有待传内容。
+
+等待超过预期时先查同步状态，不用盲目创建第二份记忆。A 的更新返回成功只表示 A 的本地写入成功；B 曾读到旧版本不证明此次更新已传播。记录观察到的结果，不把“已配置”当作“已同步”。
+
+## 日常边界
+
+- 休眠或离线设备不能接收新内容；重新联网后等待同步，再对共享主题进行修改。
+- 初次接收时，先获取已有语料再启动 MCP，避免重复初始化说明；全新库只由选定的源端先初始化。
+- 相同 Folder ID 才表示同一个共享目录，Label 和绝对路径可以不同。已有两套独立记忆不能靠同名文件夹安全合并，需先备份并显式整理。
+- Send Only / Receive Only 与本文的双向编辑流程不同；如果刻意选择这些模式，按其语义使用，不随意点击 Override/Revert。
+- Syncthing 版本保留不是本机每次写入的日志，主要作用于收到的远端替换/删除；另外保存独立备份。[官方版本保留说明](https://docs.syncthing.net/users/versioning.html)
+- 移除设备前解除共享；仍在共享时删除文件，会向其他设备传播。停止 HTTP MCP 不会停止文件同步。
+
+`sync-prepare` 只准备规则；`knowledge_status` 只检查当前语料。它们都不会安装 Syncthing、配对设备或读取其网络连接状态。

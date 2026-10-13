@@ -2,7 +2,7 @@
 
 Portable, human-readable Markdown memory shared by multiple agents through MCP.
 
-[中文](README.md) · [Remote access](docs/remote.md) · [Device sync](docs/sync.md) · [Format](docs/format.md)
+[中文](README.md) · [Your VPS](docs/vps.md) · [Remote access](docs/remote.md) · [Device sync](docs/sync.md) · [Troubleshooting](docs/troubleshooting.md) · [Format](docs/format.md)
 
 Remember a confirmed project decision in one conversation and retrieve it from another client. Markdown is canonical; reads never update recency, and writes use the latest etag. Local lexical search supports Chinese without embeddings or API keys.
 
@@ -63,6 +63,25 @@ Environment alternatives: `AGENT_KNOWLEDGE_ROOT`, `AGENT_KNOWLEDGE_SCOPE`. CLI o
 Remote HTTP MCP supports bearer authentication and an optional URL credential for URL-only clients. Syncthing replication keeps offline local copies; `sync-prepare` generates ignore rules, while installing and pairing Syncthing is separate. See the linked bilingual guides.
 
 Local tool writes use a cross-process lock and check etags inside it. External editors, sync clients, and other devices do not participate in the lock. Conflicts need explicit resolution; replication is not backup. Anyone holding an HTTP credential has read/write/delete access to the entire library.
+
+## Ask an agent to help with deployment
+
+Give an agent with terminal/SSH capabilities the repository URL and this request. The detailed VPS and troubleshooting guides include Chinese instructions and command examples. Account authentication may still require you to act personally.
+
+```text
+Help me set up agent-knowledge-mcp using the official repository documentation.
+Read README, docs/vps.md, docs/remote.md, docs/sync.md, and docs/troubleshooting.md first.
+Inspect my OS, Node version, MCP client support, existing memory roots, VPS SSH access, and existing services.
+Establish whether I need remote access, offline replicated copies, or both. Ask only for missing information.
+Replace example users and paths with actual values, reuse suitable existing services, and preserve relevant configurations before changes.
+Wait for initial replication before starting MCP on a receiving device. Never overwrite an existing library with an empty one.
+Work within my authorization. Keep credentials outside the corpus and out of chat/logs; check Host, Origin and client authentication support.
+Verify the actual client, then create/read/update/delete one unique temporary memory. If replicating, verify propagation to the other peer.
+Check corpus health and Syncthing connectivity separately, and verify service survival after SSH logout.
+Report what was verified, remaining gaps, configuration locations, connection method, and revocation steps.
+```
+
+The setup request is separate from the daily memory instructions above. Configuration completion alone does not prove client compatibility or synchronization. `knowledge_status` checks the local corpus, not network connectivity.
 
 ## Development
 
