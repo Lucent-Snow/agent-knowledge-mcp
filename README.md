@@ -183,3 +183,6 @@ npm run test:sync
 格式与实现边界见 [docs/format.md](docs/format.md)；开发约定见 [AGENTS.md](AGENTS.md)。
 
 MIT License.
+
+## 友情链接
+* [Linux DO](https://linux.do/)
