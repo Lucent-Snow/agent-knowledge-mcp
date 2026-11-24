@@ -12,6 +12,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 const cli = new URL('../src/cli.mjs', import.meta.url);
 const exec=promisify(execFile), children=[], clients=[];
+let stores=[];
 const base=await mkdtemp(path.join(tmpdir(),'knowledge-sync-e2e-'));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const port=()=>new Promise(r=>{const s=createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>r(p))})});
@@ -19,13 +20,13 @@ async function waitFor(fn, label) {for(let i=0;i<120;i++){try{if(await fn())retu
 try {
  const nodes=[];
  for(const name of ['a','b']) {
-  const home=path.join(base,name+'-config'), root=path.join(base,name+'-memory');
+  const home=path.join(base,name+'-config'), root=path.join(base,name+'-memory'), cacheDir=path.join(base,name+'-cache'), maintenanceRoot=path.join(base,name+'-maint');
   await exec('syncthing',['generate','--home',home,'--no-port-probing']);
   const xml=await readFile(path.join(home,'config.xml'),'utf8');
   const id=xml.match(/<device id="([^"]+)"/)[1], key=xml.match(/<apikey>([^<]+)<\/apikey>/)[1];
-  nodes.push({home,root,xml,id,key,sync:await port(),gui:await port()});
+  nodes.push({home,root,cacheDir,maintenanceRoot,xml,id,key,sync:await port(),gui:await port()});
  }
- const stores=nodes.map(n=>new KnowledgeStore({root:n.root}));
+ stores=nodes.map(n=>new KnowledgeStore({root:n.root,cacheDir:n.cacheDir,maintenanceRoot:n.maintenanceRoot}));
  await stores[0].initialize();
  for(const s of stores)await prepareSync(s);
  for(let i=0;i<2;i++) {
@@ -46,7 +47,7 @@ try {
  const api=async(n,url,method='GET',body)=>{const r=await fetch(`http://127.0.0.1:${n.gui}/rest/${url}`,{method,headers:{'X-API-Key':n.key,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw new Error('Syncthing API '+r.status);return r.status===204?null:await r.text()};
  for(const n of nodes)await waitFor(async()=>{await api(n,'system/status');return true},'daemon startup');
  await waitFor(async()=>{const d=await stores[1].read('memory://context/global/memory-system',{relations:'none'});return d.body.includes('Memory usage guide')},'seed replication');
- for(const n of nodes){const c=new Client({name:'isolated-sync-test',version:'1'});await c.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(cli),'serve','--root',n.root]}));clients.push(c)}
+ for(const n of nodes){const c=new Client({name:'isolated-sync-test',version:'1'});await c.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(cli),'serve','--root',n.root,'--cache-dir',n.cacheDir,'--maintenance-root',n.maintenanceRoot]}));clients.push(c)}
  const call=async(c,name,args)=>{const r=await c.callTool({name,arguments:args});if(r.isError)throw new Error(r.content[0].text);return r.structuredContent};
  const uri='memory://project/sync-roundtrip';
  await call(clients[0],'knowledge_write',{mode:'create',uri,name:'Sync roundtrip',description:'isolated two-peer test',body:'created on A'});
@@ -57,7 +58,7 @@ try {
  const a=await call(clients[0],'knowledge_read',{uri});
  await call(clients[0],'knowledge_delete',{uri,expectedEtag:a.etag});
  await waitFor(async()=>{try{await stores[1].read(uri,{relations:'none'});return false}catch(e){return e.code==='NOT_FOUND'}},'delete replication');
- // Put a private file outside the four memory trees and ensure it never transfers.
+ // Put a private file outside the five memory trees, archive, and .trash, and ensure it never transfers.
  await writeFile(path.join(nodes[0].root,'should-not-sync.txt'),'private local data');
  for(const n of nodes)await api(n,'db/scan?folder=memory-test','POST');
  await sleep(1500);
@@ -66,6 +67,7 @@ try {
  console.log(JSON.stringify({seedReplication:true,createReplication:true,reverseUpdate:true,deleteReplication:true,nonMemoryExcluded:true,isolatedPeers:2}));
 } finally {
  for(const c of clients)await c.close().catch(()=>{});
+ for(const s of stores)s.close();
  for(const p of children)p.kill('SIGTERM');
  await Promise.all(children.map(p=>new Promise(r=>{if(p.exitCode!==null)return r();p.once('close',r);setTimeout(()=>{p.kill('SIGKILL');r()},3000).unref()})));
  await rm(base,{recursive:true,force:true});

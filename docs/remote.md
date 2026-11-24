@@ -9,7 +9,7 @@ Run the same package on an always-on device and connect remotely over Streamable
 ## Bearer token（默认 / default）
 
 ```sh
-npm install -g agent-knowledge-mcp@0.1.0
+npm install -g agent-knowledge-mcp@0.2.0
 
 # 凭证保存到记忆库之外；命令不打印秘密，也不覆盖已有凭证
 agent-knowledge-mcp token --token-file /absolute/private/path/mcp.token
@@ -62,7 +62,7 @@ agent-knowledge-mcp serve \
   --allowed-host memory.example.com
 ```
 
-入口变为 `https://memory.example.com/mcp/<token>`。整个网址就是凭证，持有者可以使用全部六工具。代理使用 `location /mcp/`，保持完整路径转发，并关闭访问日志、错误日志和缓存；检查 CDN 及隧道服务也不记录该路径。服务本身不会在日志中输出秘密网址。
+入口变为 `https://memory.example.com/mcp/<token>`。整个网址就是凭证，持有者可以使用全部七个工具。代理使用 `location /mcp/`，保持完整路径转发，并关闭访问日志、错误日志和缓存；检查 CDN 及隧道服务也不记录该路径。服务本身不会在日志中输出秘密网址。
 
 URL 模式的完整 location 示例（替换前面的 Bearer location）：
 
@@ -131,7 +131,7 @@ URL 模式用客户端或官方 SDK验证完整秘密 URL；不要把其值留�
 | Authentication | Authorization: Bearer <token> | URL 本身携带凭证；可不额外登录 |
 | Host / Origin | 服务允许实际 hostname 和必要 Origin | 同左 |
 
-连接后让 Agent 列出六工具，读取使用说明，创建一条唯一临时记忆、读取、更新、用最新 etag 删除，再确认已消失。仅看到工具列表不算写入验证；执行失败时记录错误码和检查层次。
+连接后让 Agent 列出七个工具，读取使用说明，创建一条唯一临时记忆、读取、更新、用最新 etag 删除，再确认已消失。仅看到工具列表不算写入验证；执行失败时记录错误码和检查层次。
 
 服务器不提供 OAuth discovery 或 legacy SSE。客户端无法设置 Bearer header、又不接受带路径凭证的 HTTP 连接时，需要相应网关或其他支持的客户端；不能保证只粘贴任意网址就能兼容所有客户端。
 
@@ -143,6 +143,6 @@ All credential holders can read, write, and delete the whole root. There is no p
 
 轮换时生成一个新的 private token 文件，在服务参数里改为它并重启，然后更新客户端。确认新凭证可用、旧凭证已拒绝后再清理旧文件；生成命令不会覆盖现有 token。旧 URL 不能仅靠删除聊天消息撤销，必须轮换或停止服务。
 
-本版本使用 stateless HTTP JSON 响应，只接受 POST；不是 legacy SSE 服务。客户端功能和认证支持可能不同；已通过官方 Node MCP SDK 的真实握手和六工具往返验证，未声称验证所有网页客户端。
+本版本使用 stateless HTTP JSON 响应，只接受 POST；不是 legacy SSE 服务。客户端功能和认证支持可能不同；已通过官方 Node MCP SDK 的真实握手和七个工具往返验证，未声称验证所有网页客户端。
 
 This is stateless Streamable HTTP with JSON responses, not legacy SSE. Verified with the official Node MCP SDK; compatibility with every hosted client is not implied.

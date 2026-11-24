@@ -8,11 +8,11 @@ Troubleshoot one layer at a time. Use this guide with [VPS setup](vps.md), [remo
 
 | 现象 | 检查与处理 |
 |---|---|
-| Node 太旧、模块或语法错误 | 查看客户端实际调用的 Node，而不仅是交互式终端；本包需要 Node >=22。 |
+| Node 太旧、模块或语法错误 | 查看客户端实际调用的 Node，而不仅是交互式终端；本包需要 Node >=22.13.0。 |
 | 找不到 npx/命令，终端能用但客户端不能 | 客户端可能不继承 shell 的 PATH；填写可执行文件绝对路径。Windows 客户端可能要求 npx.cmd。根据客户端格式配置，不盲目复制其他客户端的文件结构。 |
 | 启动后一直没有普通文本输出 | stdio serve 正在等 MCP 客户端，stdout 是协议；这是预期。HTTP serve 也会持续运行，启动信息写 stderr。 |
 | “什么都没记住”，只看到默认说明 | 检查实际 root、运行用户、env 和 CLI 参数。电脑、VPS、sudo 用户、Docker 容器可以各有独立 HOME；空库健康并不等于连接到目标库。 |
-| 有文件但查不到 | 必须在四类目录内、使用合法 ASCII URI 路径、带有效 frontmatter。status 查看坏文档；archived 默认退出 find，ambient:false 只影响基础上下文，Identity 仍可显式 find/read。 |
+| 有文件但查不到 | 必须在五类目录内、使用合法 ASCII URI 路径、带有效 frontmatter（项目子笔记需传 `project` 或 `includeSubnotes: true`，`<!-- knowledge:history -->` 内历史段落需传 `includeHistory: true`）。status 查看坏文档；归档与 `ambient:false` 只影响默认检索或基础上下文。 |
 | Context 没出现 | 查看 global 路径、ambient、scope 匹配、归档状态和截断提示；必要时精确 read。新 scope 不会自动移动记忆。 |
 | 更新 ETAG_MISMATCH | 重读最新正文与 etag，判断旧修改是否仍适用，再提交更新；不要仅替换 etag 后盲写旧正文。 |
 | LOCK_UNAVAILABLE / LOCK_LOST | 检查是否有其他本机写入、目录/临时目录权限、异常进程；等操作结束再重读重试。正常终止和陈旧锁会由锁机制处理，不要在活动写入期间手动删锁。 |
@@ -51,12 +51,12 @@ Troubleshoot one layer at a time. Use this guide with [VPS setup](vps.md), [remo
 | GUI 打不开，文件仍在同步 | 8384 是管理端口，不是同步端口；通过 SSH 转发管理页面，确认隧道本地端口与目标实例 GUI 端口。 |
 | 首次说明产生冲突 | 两端在接收前各自 init/serve，生成了不同时间和内容的种子。比较两个版本保留一份，接收端后续先同步再启动。 |
 | 添加 VPS 后原资料消失/变多 | 暂停相关写入和共享，保留现有副本；核对是否连接错库、共享了错误目录、使用 Override/Revert、或传播了删除。不要用空目录直接覆盖远端来“重置”。 |
-| 某设备没有 .stignore | 该文件不同步；在那台设备运行 sync-prepare。已有自定义规则优先，检查是否有 * 把四类目录也挡住。 |
+| 某设备没有 .stignore | 该文件不同步；在那台设备运行 sync-prepare。已有自定义规则优先，检查是否有 * 把五类目录、`archive/` 或 `.trash/` 挡住。 |
 | sync-conflict 文件越来越多 | 多端同时改同一个文件且修改尚未传播。检查是否有重复实例/后台编辑，等待同步；比较冲突与规范正文后显式处理。 |
 | 两台机器的文件权限不同 | 先确保各自服务用户有权限；跨 Windows/Unix 必要时按 Syncthing 文档评估 Ignore Permissions，本机 token 仍需单独保护。 |
 | 笔记本睡眠/换网后不更新 | 离线、休眠或后台服务暂停期间无法传播；唤醒联网并确认服务仍运行、文件夹 Up to Date。 |
 | knowledge_status healthy 但另一台没更新 | healthy 只描述当前本地文件格式和冲突。同步连接与待传状态必须查 Syncthing，不能用 healthy 代替。 |
-| 误删已同步，想恢复 | 暂停写入，检查 Syncthing 文件版本和独立备份；确认恢复来源和当前共享状态再恢复。不要假设本机每次编辑都自动留有历史。 |
+| 误删已同步，想恢复 | 若 72 小时内通过 `knowledge_delete` 删除，先用 `knowledge_status(view: "trash")` 查找并以 `knowledge_maintain(action: "restore")` 恢复；否则暂停写入，检查 Syncthing 文件版本和独立备份。 |
 | 重新安装服务器 | 先保留设备配置、身份和语料备份；新身份需重新配对。收集现存副本，避免用新空库直接替换共享库。 |
 
 ## 升级、移动和退出

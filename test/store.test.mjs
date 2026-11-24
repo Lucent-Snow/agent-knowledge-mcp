@@ -9,9 +9,17 @@ import { parseUri, SEED_URI, parseDocument } from '../src/format.mjs'
 import { prepareSync } from '../src/sync.mjs'
 
 async function fixture(t, options = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'knowledge-test-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const store = new KnowledgeStore({ root, ...options })
+  const dir = await mkdtemp(path.join(tmpdir(), 'knowledge-test-'))
+  const store = new KnowledgeStore({
+    root: path.join(dir, 'memory'),
+    cacheDir: path.join(dir, 'cache'),
+    maintenanceRoot: path.join(dir, 'maint'),
+    ...options,
+  })
+  t.after(async () => {
+    store.close()
+    await rm(dir, { recursive: true, force: true })
+  })
   await store.initialize()
   return store
 }
@@ -36,9 +44,17 @@ test('first run seeds one real guide; initialization preserves edits and skipped
 })
 
 test('no-seed remains empty on subsequent startup; existing library is not modified on startup', async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'knowledge-empty-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const store = new KnowledgeStore({ root })
+  const dir = await mkdtemp(path.join(tmpdir(), 'knowledge-empty-'))
+  const root = path.join(dir, 'memory')
+  const store = new KnowledgeStore({
+    root,
+    cacheDir: path.join(dir, 'cache'),
+    maintenanceRoot: path.join(dir, 'maint'),
+  })
+  t.after(async () => {
+    store.close()
+    await rm(dir, { recursive: true, force: true })
+  })
   await store.initialize({ seed: false })
   await store.initialize()
   assert.equal((await store.status()).documents, 0)
@@ -140,8 +156,8 @@ test('concurrent updates from independent Node processes reject one stale writer
   const { etag } = await store.read(uri)
   const moduleUrl = new URL('../src/store.mjs', import.meta.url).href
   const worker = body => new Promise((resolve, reject) => {
-    const code = `import {KnowledgeStore} from ${JSON.stringify(moduleUrl)}; const s=new KnowledgeStore({root:process.argv[1]}); try {await s.edit({uri:process.argv[2],expectedEtag:process.argv[3],op:'replace',body:process.argv[4]}); console.log('updated')} catch(e) {console.log(e.code)}`
-    const child = spawn(process.execPath, ['--input-type=module', '-e', code, store.root, uri, etag, body])
+    const code = `import {KnowledgeStore} from ${JSON.stringify(moduleUrl)}; const s=new KnowledgeStore({root:process.argv[1],cacheDir:process.argv[5],maintenanceRoot:process.argv[6]}); try {await s.edit({uri:process.argv[2],expectedEtag:process.argv[3],op:'replace',body:process.argv[4]}); console.log('updated')} catch(e) {console.log(e.code)} finally {s.close()}`
+    const child = spawn(process.execPath, ['--input-type=module', '-e', code, store.root, uri, etag, body, store.cacheDir, store.maintenance.root])
     let out = '', err = ''
     child.stdout.on('data', d => { out += d }); child.stderr.on('data', d => { err += d })
     child.on('error', reject); child.on('close', code => code ? reject(new Error(err)) : resolve(out.trim()))

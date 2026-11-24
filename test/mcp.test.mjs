@@ -11,29 +11,35 @@ import { KnowledgeStore } from '../src/store.mjs'
 import { createHttpServer } from '../src/http.mjs'
 import { SEED_URI } from '../src/format.mjs'
 
-const expectedTools = ['knowledge_context', 'knowledge_delete', 'knowledge_find', 'knowledge_read', 'knowledge_status', 'knowledge_write']
+const expectedTools = ['knowledge_context', 'knowledge_delete', 'knowledge_find', 'knowledge_maintain', 'knowledge_read', 'knowledge_status', 'knowledge_write']
 const cli = path.resolve('src/cli.mjs')
 const call = async (client, name, args = {}) => {
   const r = await client.callTool({ name, arguments: args })
   return { ...r, value: r.structuredContent }
 }
-async function connectStdio(root) {
+async function connectStdio(root, cacheDir, maintenanceRoot) {
   const client = new Client({ name: 'test', version: '1' })
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [cli, 'serve', '--root', root] }))
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [cli, 'serve', '--root', root, '--cache-dir', cacheDir, '--maintenance-root', maintenanceRoot],
+  }))
   return client
 }
 
 test('real stdio MCP initializes, persists across sessions, updates and deletes with etag protection', async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'knowledge-mcp-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  let client = await connectStdio(root)
+  const dir = await mkdtemp(path.join(tmpdir(), 'knowledge-mcp-'))
+  const root = path.join(dir, 'memory')
+  const cacheDir = path.join(dir, 'cache')
+  const maintenanceRoot = path.join(dir, 'maint')
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  let client = await connectStdio(root, cacheDir, maintenanceRoot)
   try {
     assert.deepEqual((await client.listTools()).tools.map(t => t.name).sort(), expectedTools)
     assert.match((await call(client, 'knowledge_context')).value.rendered, /Memory usage guide/)
     const uri = 'memory://project/demo'
     await call(client, 'knowledge_write', { mode: 'create', uri, name: 'Demo', description: '先支持本地使用', body: 'Local first' })
     await client.close()
-    client = await connectStdio(root)
+    client = await connectStdio(root, cacheDir, maintenanceRoot)
     assert.equal((await call(client, 'knowledge_find', { query: '本地使用' })).value.hits[0].uri, uri)
     const original = (await call(client, 'knowledge_read', { uri })).value
     await call(client, 'knowledge_write', { mode: 'update', uri, op: 'replace', body: 'Remote next', expectedEtag: original.etag })
@@ -43,24 +49,34 @@ test('real stdio MCP initializes, persists across sessions, updates and deletes 
     const latest = (await call(client, 'knowledge_read', { uri })).value
     assert.equal(latest.body, 'Remote next')
     assert.equal(Object.hasOwn(latest, 'filePath'), false)
-    assert.equal((await call(client, 'knowledge_delete', { uri, expectedEtag: latest.etag })).value.deleted, true)
+    const trashRef = (await call(client, 'knowledge_delete', { uri, expectedEtag: latest.etag })).value.trashUri
+    assert.match(trashRef, /^trash:\/\//)
+    const restored = (await call(client, 'knowledge_maintain', { action: 'restore', uri: trashRef, expectedEtag: (await call(client, 'knowledge_read', { uri: trashRef })).value.etag })).value
+    assert.equal(restored.restored, true)
+    const archived = (await call(client, 'knowledge_maintain', { action: 'archive', uri, expectedEtag: restored.etag })).value
+    assert.equal(archived.archived, true)
+    const finalRead = (await call(client, 'knowledge_read', { uri })).value
+    assert.equal((await call(client, 'knowledge_delete', { uri, expectedEtag: finalRead.etag })).value.deleted, true)
     assert.equal((await call(client, 'knowledge_status')).value.documents, 1)
     assert.equal((await call(client, 'knowledge_read', { uri: SEED_URI })).value.frontmatter.version, 1)
   } finally { await client.close() }
 })
 
 async function httpFixture(t, urlToken = false) {
-  const root = await mkdtemp(path.join(tmpdir(), 'knowledge-http-'))
-  const store = new KnowledgeStore({ root }); await store.initialize()
+  const dir = await mkdtemp(path.join(tmpdir(), 'knowledge-http-'))
+  const root = path.join(dir, 'memory')
+  const cacheDir = path.join(dir, 'cache')
+  const maintenanceRoot = path.join(dir, 'maint')
+  const store = new KnowledgeStore({ root, cacheDir, maintenanceRoot }); await store.initialize()
   const token = 'a'.repeat(64)
   const server = createHttpServer({ store, token, urlToken })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }) })
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); await rm(dir, { recursive: true, force: true }) })
   const base = `http://127.0.0.1:${server.address().port}`
   return { token, base, endpoint: `${base}/mcp${urlToken ? '/' + token : ''}` }
 }
 
-test('remote HTTP MCP supports real SDK handshake and all six tools with bearer authentication', async t => {
+test('remote HTTP MCP supports real SDK handshake and all seven tools with bearer authentication', async t => {
   const { token, base, endpoint } = await httpFixture(t)
   assert.equal((await fetch(endpoint, { method: 'POST' })).status, 401)
   assert.equal((await fetch(endpoint, { method: 'POST', headers: { authorization: 'Bearer wrong' } })).status, 401)

@@ -1,8 +1,8 @@
 # 文档格式 / Document format
 
-一份记忆对应一份 Markdown，YAML frontmatter 保存元数据。URI 使用 ASCII 路径，例如 `memory://project/paper-plane` 对应 `project/paper-plane.md`；标题和正文可以使用任意语言。
+一份记忆对应一份 Markdown，YAML frontmatter 保存元数据。URI 使用 ASCII 路径，例如 `memory://project/paper-plane` 对应 `project/paper-plane.md`，`memory://project/paper-plane/spec` 对应 `project/paper-plane/spec.md`，而 `memory://skill/release-check` 对应 `skill/release-check/SKILL.md`。标题和正文可以使用任意语言。
 
-One memory is one Markdown file with YAML frontmatter. URI paths use portable ASCII names. Titles and bodies can use any language.
+One memory is one Markdown document with YAML frontmatter. Skills live as bundles at `skill/<slug>/SKILL.md` alongside optional helper files such as `scripts/` or `docs/`. Titles and bodies can use any language.
 
 ```markdown
 ---
@@ -19,41 +19,37 @@ version: 1
 # 纸飞机
 
 第一版先支持本地使用。理由：先验证记忆的完整读写流程。
+
+<!-- knowledge:history -->
+## 历史讨论
+早期备选与已被取代的思路。
+<!-- /knowledge:history -->
 ```
 
-所有文档需要 `name`；Project 还需要非空 `description`。读取手写文档时可以省略 type/uri/tags/links，type 和 URI 由文件路径补齐，数组默认 `[]`。显式提供的 type/uri 必须与路径一致。
+所有文档需要 `name`；`project` 与 `skill` 还需要非空 `description`。手写文档可省略 `type`/`uri`/`tags`/`links`，由文件路径自动推导；显式填写时必须与路径一致。
 
-All documents need a name; projects also need a description. Handwritten files may omit type, URI, tags, and links. Supplied type and URI must match the file path.
+All documents require `name`; `project` and `skill` require a non-empty `description`. Paired `<!-- knowledge:history -->` / `<!-- /knowledge:history -->` lines must be balanced and non-nested outside code fences.
 
-可选字段 / Optional fields:
+## 可选字段与目录约定 / Optional fields and layout
 
-- `archived: true`：退出普通查找和基础上下文，精确 read 仍可读取。Excluded from ordinary find/context, still addressable by URI.
-- `ambient: false`：Context 不进入基础上下文。Context becomes explicit-only.
-- `scope: laptop` 或 `scope: [laptop, workstation]`：与 `--scope` 匹配的 Context 可以加载。Global Context 按 URI 路径识别。Scopes select device-specific context; global context uses `context/global/`.
-- `status: reference`：Project 不进入近期目录。Exclude a reference project from recent-project orientation.
-- `links: [{kind: explains, to: memory://note/decision}]`：类型化关系；也接受旧式 URI 字符串，读取时解释为 related。Typed relations, returned separately from canonical body.
-
-通过 MCP 创建会自动写入 type、uri、created、updated 和 version。更新可用 patch/append/replace；元数据修改放在 `frontmatter` 对象里，例如 `{"archived":true}`。type、uri、created 和 version 由存储层维护，不允许通过更新替换。
-
-MCP creation sets timestamps and version. Updates use patch, append, or replace; put metadata changes inside `frontmatter`. Storage owns type, URI, creation time, and version.
-
-etag 是当前文件原始内容的 SHA-256。直接编辑 Markdown 后 etag 会改变；Agent 必须重读再更新。CRLF 文件可读取。重复 YAML key、错误类型、URI 不一致等通过 status 报告。
-
-An etag hashes the raw file. External edits change it. CRLF is accepted. Invalid YAML and metadata are reported rather than silently repaired.
+- **归档位置（`archive/<type>/...`）**：通过 `knowledge_maintain(action: "archive")` 将文档（或整个 `skill/` 目录）迁入 `archive/`。URI 不变，工具结果返回推导字段 `archived: true`，新写入的 YAML 不再保留冗余归档标记；手动添加的旧版 `archived: true` 仍兼容读取，并在更新时迁移为目录归档。
+- **72 小时回收站（`.trash/<uuid>.json`）**：`knowledge_delete` 先写入恢复记录再移除源文件（`skill` 连同目录移至 `.trash/<uuid>-bundle`），过期前可通过 `knowledge_maintain(action: "restore")` 恢复，不覆盖同名新建文档。
+- **`ambient: false` / `pinned: true`**：控制 `context` 是否自动注入基础上下文，以及 `skill` 是否置顶于 `/skills/recent`。
+- **`scope: laptop` 或 `scope: [laptop, workstation]`**：与 `--scope` 匹配的 Context 可以加载；全局 Context 位于 `context/global/`。
+- **`status: reference`**：Project 不进入近期项目目录（`/projects/recent`）。
+- **`updatedBy`**：当配置 `--actor` / `AGENT_KNOWLEDGE_ACTOR` 时自动记录最近修改者标识。
+- **`links: [{kind: explains, to: memory://note/decision}]`**：类型化关系；也接受旧式 URI 字符串（解析为 `related`）。读取顶层项目时还会独立返回活跃子笔记摘要 `children`。
 
 ## 实现边界 / Implementation boundaries
 
-- `src/format.mjs`：唯一的格式验证、URI 和词法评分逻辑。The only format and scoring implementation.
-- `src/store.mjs`：存储、初始化、容错扫描、上下文、关系和本机写入锁。Store and deterministic projections.
-- `src/server.mjs`：六工具注册，stdio 与 HTTP 共用。Shared MCP factory.
-- `src/http.mjs`：认证、Host/Origin 验证与 stateless Streamable HTTP。HTTP transport and authentication.
-- `src/sync.mjs`：本机 Syncthing ignore 规则，不负责文件复制。Local sync preparation, not replication.
-- `src/cli.mjs`：命令行入口。CLI entry.
-
-本机锁位于系统临时目录，不进入同步语料。锁覆盖同一用户、同一物理 root 上的本机工具写入；其他用户、外部编辑器、远端设备和文件同步不参与。写入通过同目录临时文件加 rename 替换；这不是跨设备锁，也不保证突然断电时的持久性。外部修改在最终检查后发生，仍可能竞争，应依赖版本备份和冲突复查。
-
-Local locks live outside the replicated corpus. They coordinate local tool writes for the same OS user and physical root. Atomic rename prevents partial tool updates; it is not a distributed transaction or a power-loss durability guarantee. External writers can still race after the final check.
-
-内部 `.agent-knowledge.json` 只保存初始化标记，不保存记忆或凭证。第一次启动只为空库写入说明；显式 init 可补缺失说明。种子说明修改后，升级不会替换它。
-
-The local initialization marker is not a memory. Startup seeds a fresh library; explicit init can add a missing guide without replacing edits.
+- `src/sections.mjs`：显式 `<!-- knowledge:history -->` 区段解析与偏移保持投影。
+- `src/format.mjs`：URI 验证、路径映射（含 `skill` 与 `archive/`）、项目子笔记作用域与 frontmatter 校验。
+- `src/ranking.mjs` / `src/lexical-index.mjs`：可丢弃的 `node:sqlite` 双字/词单元 BM25F 索引与纯内存降级实现；缓存默认位于 `~/.cache/agent-knowledge-mcp/`（可通过 `--cache-dir` 或 `--no-index` 控制）。
+- `src/access-stats.mjs`：Skill 本机 LRU 访问统计（`node:sqlite`），只读访问不污染 Markdown。
+- `src/providers.mjs` / `src/vectors.mjs`：可选 OpenAI 兼容 `/v1/embeddings` 与 `/v1/rerank` 客户端及增量 SQLite 向量缓存；未配置环境变量时不发起任何网络请求，异常自动熔断并降级。
+- `src/maintenance.mjs`：变化列表（`changes`）与位于语料之外的本地检查点（`<root>-maintenance` 或 `--maintenance-root`）。
+- `src/store.mjs`：跨进程文件锁、乐观并发控制、归档迁移、72 小时回收站、检索与上下文投影。
+- `src/server.mjs`：七工具注册，stdio 与 HTTP 共用。
+- `src/http.mjs`：认证、Host/Origin 验证与 stateless Streamable HTTP。
+- `src/sync.mjs`：本机 Syncthing ignore 规则。
+- `src/cli.mjs`：命令行入口。

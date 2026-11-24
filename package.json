@@ -1,7 +1,7 @@
 {
   "name": "agent-knowledge-mcp",
-  "version": "0.1.0",
-  "description": "Portable Markdown memory for agents: local and remote MCP, Chinese lexical search, and sync-friendly files.",
+  "version": "0.2.0",
+  "description": "Portable Markdown memory for agents: 7 MCP tools, project hierarchies, skills, batch curation, Chinese BM25F, optional vector/rerank, and multi-device sync.",
   "type": "module",
   "license": "MIT",
   "author": "Lucent-Snow",
@@ -11,7 +11,7 @@
   "bin": { "agent-knowledge-mcp": "src/cli.mjs" },
   "exports": { ".": "./src/store.mjs", "./server": "./src/server.mjs" },
   "files": ["src/", "templates/", "docs/", "README.md", "README.en.md", "LICENSE"],
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.13.0" },
   "keywords": ["mcp", "memory", "markdown", "agent", "syncthing"],
   "scripts": { "test": "node --test test/*.test.mjs", "test:sync": "node test/sync-e2e.mjs", "prepublishOnly": "npm test" },
   "dependencies": {

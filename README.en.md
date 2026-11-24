@@ -2,26 +2,26 @@
 
 Portable, human-readable Markdown memory shared by multiple agents through MCP.
 
-[中文](README.md) · [Your VPS](docs/vps.md) · [Remote access](docs/remote.md) · [Device sync](docs/sync.md) · [Troubleshooting](docs/troubleshooting.md) · [Format](docs/format.md)
+[中文](README.md) · [Retrieval](docs/retrieval.md) · [Curation & batch review](docs/curation.md) · [Maintenance](docs/maintenance.md) · [Your VPS](docs/vps.md) · [Remote access](docs/remote.md) · [Device sync](docs/sync.md) · [Troubleshooting](docs/troubleshooting.md) · [Format](docs/format.md)
 
-Remember a confirmed project decision in one conversation and retrieve it from another client. Markdown is canonical; reads never update recency, and writes use the latest etag. Local lexical search supports Chinese without embeddings or API keys.
+Remember a confirmed project decision in one conversation and retrieve it from another client. Markdown is canonical; reads never update Markdown timestamps, and writes use the latest etag. Zero-config local Chinese/English BM25F (`node:sqlite`, or `--no-index` in-memory) works out of the box, with optional OpenAI-compatible embeddings and reranking when configured.
 
 ## Start
 
-Requires Node.js 22+ and a client supporting local stdio MCP. Add this common MCP configuration (your client's configuration format may differ):
+Requires Node.js 22.13+ and a client supporting local stdio MCP. Add this common MCP configuration (your client's configuration format may differ):
 
 ```json
 {
   "mcpServers": {
     "agent-knowledge": {
       "command": "npx",
-      "args": ["-y", "agent-knowledge-mcp@0.1.0", "serve"]
+      "args": ["-y", "agent-knowledge-mcp@0.2.0", "serve"]
     }
   }
 }
 ```
 
-Use an absolute `npx` path if the client cannot find it; Windows clients may require `npx.cmd`. Alternatively install globally with `npm install -g agent-knowledge-mcp@0.1.0` and use `agent-knowledge-mcp serve`.
+Use an absolute `npx` path if the client cannot find it; Windows clients may require `npx.cmd`. Alternatively install globally with `npm install -g agent-knowledge-mcp@0.2.0` and use `agent-knowledge-mcp serve`.
 
 First startup creates `~/.agent-knowledge/` and one editable bilingual usage guide. Personal memories start empty. Installation itself does not run setup, and upgrades never overwrite your documents.
 
@@ -43,11 +43,12 @@ Try asking your agent to remember a project decision, open a new conversation, a
 ## Types and tools
 
 - **Context**: stable operating agreements; selected global/scoped documents enter the baseline unless `ambient: false`.
-- **Project**: ongoing goals, state, and decisions; only summaries of up to 12 projects updated in the last 30 days enter the baseline.
+- **Project**: ongoing goals, state, and decisions at `memory://project/<id>`, plus scoped sub-notes at `memory://project/<id>/<sub-note>`. Only top-level projects enter `/projects/recent`; sub-notes stay isolated unless queried with `project` or `includeSubnotes: true`. Reading a top-level project includes `children`.
 - **Note**: reusable lessons and evidence, retrieved on demand.
 - **Identity**: explicit personal/role context, excluded from the default baseline. This is not an access-control boundary.
+- **Skill**: reusable workflow bundles (`skill/<slug>/SKILL.md` + helper files under `scripts/`, `docs/`, etc.), tracked via local SQLite LRU stats without mutating Markdown.
 
-Six tools: `knowledge_context`, `knowledge_find`, `knowledge_read`, `knowledge_write`, `knowledge_delete`, `knowledge_status`. Relations are returned separately from canonical body text. Context has a 16,000-character budget and reports truncation. Ordinary retirement uses `archived: true`.
+Seven tools: `knowledge_context`, `knowledge_find`, `knowledge_read`, `knowledge_write`, `knowledge_delete`, `knowledge_status`, `knowledge_maintain`. Paired `<!-- knowledge:history -->` / `<!-- /knowledge:history -->` markers keep historical rationale out of default retrieval/context while preserving full `knowledge_read`. Ordinary retirement moves memories into `archive/` (`knowledge_maintain`), and deletions enter a 72-hour `.trash/` recycle bin. See [docs/curation.md](docs/curation.md) for the scheduled batch-curation prompt template.
 
 ## Configuration
 

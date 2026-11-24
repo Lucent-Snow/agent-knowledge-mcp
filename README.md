@@ -2,18 +2,18 @@
 
 **让不同 Agent 共用一套简洁、可读的长期记忆。**
 
-[English](README.en.md) · [接入自己的 VPS](docs/vps.md) · [远程访问](docs/remote.md) · [多端同步](docs/sync.md) · [故障排查](docs/troubleshooting.md) · [文档格式](docs/format.md)
+[English](README.en.md) · [检索与可选扩展](docs/retrieval.md) · [定期整理与批处理](docs/curation.md) · [增量变更与回收站](docs/maintenance.md) · [接入自己的 VPS](docs/vps.md) · [远程访问](docs/remote.md) · [多端同步](docs/sync.md) · [故障排查](docs/troubleshooting.md) · [文档格式](docs/format.md)
 
-换一个聊天、模型或客户端，仍能找回之前确认的项目决定和经验。记忆保存在你自己的 Markdown 文件里，通过六个 MCP 工具读取和维护。
+换一个聊天、模型或客户端，仍能找回之前确认的项目决定和经验。记忆保存在你自己的 Markdown 文件里，通过七个 MCP 工具读取、检索、批处理与维护。
 
-- **Markdown 是唯一真源**：可以直接阅读、编辑、备份和迁移。
-- **本地即可使用**：中文词法检索，无 embedding、模型 API key 或外部检索服务。
-- **按需加载**：基础上下文只包含使用说明、选定的 Context 和近期项目目录；正文按需读取。
-- **跨端共享**：本地 MCP、远程 HTTP MCP，以及可选的 Syncthing 文件同步。
+- **Markdown 是唯一真源**：可以直接阅读、编辑、备份和迁移；可重建索引均放在语料外目录。
+- **零配置本地检索**：基于 `node:sqlite` 的多字段中文双字 BM25F（支持 `--no-index` 纯内存降级）；无需 API key 即可使用，也可按需通过环境变量开启 OpenAI 兼容向量召回与重排。
+- **精细上下文隔离**：基础上下文默认仅加载顶层 `Context`、近期顶层 `Project` 摘要与近期/置顶 `Skill`；`project` 子笔记按作用域隔离，`<!-- knowledge:history -->` 历史过程默认不污染检索。
+- **可恢复维护**：位置化归档（`archive/`）、72 小时 `.trash/` 软删除、带本地断点 `checkpoint` 的增量批处理、以及 Syncthing 多端同步与远程 HTTP MCP。
 
 ## 开始使用
 
-需要 **Node.js 22 或更新版本**，以及支持本地 stdio MCP 的 Agent 客户端。
+需要 **Node.js 22.13 或更新版本**，以及支持本地 stdio MCP 的 Agent 客户端。
 
 在客户端的 MCP 配置中加入：
 
@@ -22,7 +22,7 @@
   "mcpServers": {
     "agent-knowledge": {
       "command": "npx",
-      "args": ["-y", "agent-knowledge-mcp@0.1.0", "serve"]
+      "args": ["-y", "agent-knowledge-mcp@0.2.0", "serve"]
     }
   }
 }
@@ -35,7 +35,7 @@
 也可以全局安装，再使用 `agent-knowledge-mcp` 命令：
 
 ```sh
-npm install -g agent-knowledge-mcp@0.1.0
+npm install -g agent-knowledge-mcp@0.2.0
 agent-knowledge-mcp init
 ```
 
@@ -83,28 +83,33 @@ Agent 会查找已有主题、读取最新版本，再更新它。系统不会�
 ~/.agent-knowledge/
 ├── context/global/memory-system.md  # 内置使用说明，可自行修订
 ├── context/                        # 常用约定和 scoped 背景
-├── project/                        # 持续项目
+├── project/                        # 顶层项目与 memory://project/<id>/<sub-note> 子笔记
 ├── note/                           # 方法、经验和证据
-└── identity/                       # 显式需要时才读取的人物背景
+├── identity/                       # 显式需要时才读取的人物背景
+├── skill/                          # 可复用步骤束（<slug>/SKILL.md + scripts/ 等附件）
+├── archive/                        # 退场归档区（保持原 URI 不变）
+└── .trash/                         # 72 小时软删除回收站
 ```
 
-| 类型 | 保存什么 | 默认基础上下文 |
+| 类型 | 保存什么 | 默认基础上下文与检索作用域 |
 |---|---|---|
 | Context | 跨任务反复需要的稳定约定 | global 和匹配 scope 的文档；`ambient: false` 可退出 |
-| Project | 目标、状态、决定和理由 | 最近 30 天更新的最多 12 个项目摘要 |
+| Project | 目标、状态、决定与子笔记 | 仅顶层项目进入近期摘要；子笔记按 `project` 作用域按需检索 |
 | Note | 方法、经验、证据、专题结论 | 按需查找和读取 |
 | Identity | 人物、自我或关系背景 | 不默认加载；可显式查找和读取 |
+| Skill | 可复用方法与脚本附件目录 | 按置顶与近期本地使用频率进入摘要；读取附件不改写正文 |
 
-Identity 的加载规则不构成权限隔离。所有连接此库的客户端，都可以使用全部六个工具。
+Identity 的加载规则不构成权限隔离。所有连接此库的客户端，都可以使用全部七个工具。
 
 | 工具 | 用途 |
 |---|---|
-| `knowledge_context` | 有长度上限的基础上下文，默认不含 Identity、Note 或项目正文 |
-| `knowledge_find` | 浏览摘要，或按标题、描述、tags、正文等词法检索 |
-| `knowledge_read` | 正文、元数据、etag；关系作为独立字段返回 |
-| `knowledge_write` | 创建或更新；支持精确 patch、append、replace |
-| `knowledge_delete` | 使用最新 etag 永久删除；普通退役优先归档 |
-| `knowledge_status` | 检查坏文档和同步冲突，不自动合并 |
+| `knowledge_context` | 有长度上限的基础上下文，含 `/skills` 视图，默认不含 Identity、Note、子笔记或历史区段 |
+| `knowledge_find` | 浏览摘要，或增量 BM25F / 可选 RRF 混合检索；支持 `project` 作用域与 `includeHistory` |
+| `knowledge_read` | 完整正文、YAML 元数据、`contentSections`、`relations`、顶层项目 `children` 或 `trash://` / `skill` 附件 |
+| `knowledge_write` | 创建或更新（`patch` / `append` / `replace`）；支持 `<!-- knowledge:history -->` 与 `skill` 多文件 |
+| `knowledge_delete` | 使用最新 etag 移入 72 小时 `.trash/` 回收站；普通退役优先归档 |
+| `knowledge_status` | 只读检查坏文档/冲突（`health`）、增量变化（`changes` + `checkpoint`）、回收站与向量覆盖 |
+| `knowledge_maintain` | 显式维护变更：`checkpoint` 提交、从 `trash://` 恢复、过期清理及 `archive`/`unarchive` 位置迁移 |
 
 ## 配置和命令
 

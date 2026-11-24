@@ -15,6 +15,12 @@ const RULES = `${BEGIN}
 !/note/**
 !/identity
 !/identity/**
+!/skill
+!/skill/**
+!/archive
+!/archive/**
+!/.trash
+!/.trash/**
 *
 ${END}`
 

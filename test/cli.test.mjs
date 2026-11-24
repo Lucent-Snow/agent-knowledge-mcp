@@ -8,11 +8,12 @@ import path from 'node:path'
 
 const exec = promisify(execFile)
 const cli = path.resolve('src/cli.mjs')
-const run = (...args) => exec(process.execPath, [cli, ...args])
 
 test('CLI init, status, sync preparation and token commands work without revealing credentials', async t => {
   const dir = await mkdtemp(path.join(tmpdir(), 'knowledge-cli-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
+  const env = { ...process.env, AGENT_KNOWLEDGE_CACHE_DIR: path.join(dir, 'cache') }
+  const run = (...args) => exec(process.execPath, [cli, ...args], { env })
   const root = path.join(dir, 'memory'), token = path.join(dir, 'private', 'mcp.token')
   const initialized = JSON.parse((await run('init', '--root', root)).stdout)
   assert.equal(initialized.seeded, true)
@@ -30,5 +31,6 @@ test('CLI init, status, sync preparation and token commands work without reveali
   await assert.rejects(run('serve', '--root', root, '--transport', 'http'))
   await assert.rejects(run('serve', '--root', root, '--transport', 'http', '--token-file', token, '--port', '99999'))
   assert.match((await run('--help')).stdout, /sync-prepare/)
-  assert.equal((await run('--version')).stdout.trim(), '0.1.0')
+  assert.equal((await run('--version')).stdout.trim(), '0.2.0')
+  assert.equal(JSON.parse((await run('status', '--root', root, '--view', 'checkpoint', '--maintenance-root', path.join(dir, 'maint'))).stdout).checkpoint.etag, 'missing')
 })

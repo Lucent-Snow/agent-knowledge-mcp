@@ -25,13 +25,13 @@ Initialize the library, install Syncthing, prepare ignores, then share the root 
 
 Prepare an empty receiving root before starting MCP, pair devices, accept the existing folder, and wait for the initial sync. Reuse the replicated guide instead of creating a second seed concurrently.
 
-`.stignore` **不会自动同步**，每台设备都需要运行 sync-prepare。既有自定义规则保留在最前面；Syncthing 的第一条匹配规则优先。如果你已经用 `*` 忽略全部内容，需要自行检查规则是否允许四类记忆。
+`.stignore` **不会自动同步**，每台设备都需要运行 sync-prepare。既有自定义规则保留在最前面；Syncthing 的第一条匹配规则优先。如果你已经用 `*` 忽略全部内容，需要自行检查规则是否允许五类记忆、`archive/` 和 `.trash/`。
 
 The local `.stignore` is not replicated. Run preparation on every device. Existing rules remain first and can override the generated include rules. See [official ignore semantics](https://docs.syncthing.net/users/ignoring.html).
 
-生成规则只共享 context/project/note/identity，排除初始化标记、临时写入文件和其他根目录内容。同步冲突副本保留并传播，不能把它们忽略掉。锁和 HTTP 凭证不在语料里。
+生成规则只共享 `context/project/note/identity/skill`、`archive/` 和 `.trash/`，排除初始化标记、临时写入文件和其他根目录内容。同步冲突副本保留并传播，不能把它们忽略掉。锁、本地缓存、批处理 checkpoint 和 HTTP 凭证不在语料里。
 
-Generated rules include the four memory trees and retain conflict copies. Local initialization state and write temporary files are excluded. Locks live in the OS temporary directory; credentials belong outside the root.
+Generated rules include the five memory trees, `archive/`, and `.trash/`, and retain conflict copies. Local initialization state and write temporary files are excluded. Locks, SQLite caches, maintenance checkpoints, and credentials belong outside the root.
 
 ## 冲突和备份 / Conflicts and backup
 

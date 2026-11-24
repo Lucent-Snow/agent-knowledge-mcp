@@ -24,12 +24,12 @@ node --version
 npm --version
 ```
 
-Node 必须为 22 或更新版本。没有 Node 或版本太旧时，先按 [Node 官方安装说明](https://nodejs.org/en/download)安装支持版本。系统包中的 Node 不一定满足要求。
+Node 必须为 22.13 或更新版本。没有 Node 或版本太旧时，先按 [Node 官方安装说明](https://nodejs.org/en/download)安装支持版本。系统包中的 Node 不一定满足要求。
 
 使用当前用户安装包，避免 sudo 安装出另一套用户目录：
 
 ```sh
-npm install -g --prefix "$HOME/.local" agent-knowledge-mcp@0.1.0
+npm install -g --prefix "$HOME/.local" agent-knowledge-mcp@0.2.0
 export PATH="$HOME/.local/bin:$PATH"
 agent-knowledge-mcp --version
 ```
